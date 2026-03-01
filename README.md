@@ -26,6 +26,23 @@ Submission links:
   - [`docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`](docs/hackathon/evidence/cre-keepr-queue-local-simulation.md)
 - 3-5 minute video runbook: [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md)
 
+Run the exact simulations (from `cre/cre-workflows`):
+
+```bash
+# Terminal A
+set -a && source .env && set +a
+node ../scripts/hackathon/mock-cre-api-server.mjs
+
+# Terminal B
+cre workflow simulate ./payout-integrity --target local-simulation
+cre workflow simulate ./keepr-queue --target local-simulation
+```
+
+Expected proof markers:
+- `AI assessment: enabled=true` in payout-integrity output
+- `aiVerdict` and `alertsSent` fields in payout-integrity result
+- `processed=0 succeeded=0 failed=0 retried=0 skipped=0` in keepr-queue output
+
 ## Quick Navigation
 
 - [What This Repository Contains](#what-this-repository-contains)
