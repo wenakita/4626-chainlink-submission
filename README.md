@@ -8,6 +8,24 @@ It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a 
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
 
+## Chainlink Hackathon Submission (CRE + AI)
+
+This public repo is a scoped submission mirror for the Chainlink hackathon.
+
+- Tracks covered:
+  - **DeFi & Tokenization**
+  - **CRE & AI**
+- Core orchestration workflow:
+  - `cre/cre-workflows/payout-integrity/main.ts` (onchain checks + external HTTP + AI advisory)
+
+Submission links:
+- Files using Chainlink: [`cre/README.md#files-using-chainlink`](cre/README.md#files-using-chainlink)
+- Requirement mapping checklist: [`docs/hackathon/chainlink-cre-submission.md`](docs/hackathon/chainlink-cre-submission.md)
+- Simulation evidence snapshots:
+  - [`docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`](docs/hackathon/evidence/cre-payout-integrity-local-simulation.md)
+  - [`docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`](docs/hackathon/evidence/cre-keepr-queue-local-simulation.md)
+- 3-5 minute video runbook: [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md)
+
 ## Quick Navigation
 
 - [What This Repository Contains](#what-this-repository-contains)
