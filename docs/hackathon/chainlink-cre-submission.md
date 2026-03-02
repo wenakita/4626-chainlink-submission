@@ -43,6 +43,12 @@ Primary operator-facing flow for demo:
 - Solana monitor action in `cre/actions/keepr-solana-price-monitor.action.ts`
 - Solana monitor workflow definition in `cre/workflows/keepr-solana-price-monitor.workflow.ts`
 
+Fee return path (Solana -> Base):
+- Solana harvest/withdraw instruction: `programs/creator-share-hook/src/instructions/flush_fees.rs`
+- Keeper fee flush action: `cre/actions/keepr-solana-fee-flush.action.ts`
+- Base adapter entrypoint: `contracts/utilities/bridge/SolanaBridgeAdapter.sol` (`receiveFeeFromSolana`)
+- Gauge intake and distribution: `contracts/governance/CreatorGaugeController.sol` (`receiveFees`)
+
 Non-mutating Solana proof command:
 
 ```bash
