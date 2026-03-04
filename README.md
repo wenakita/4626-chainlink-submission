@@ -1,11 +1,10 @@
 # Convergence | A Chainlink Hackathon
 
 4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
-It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
+It combines ERC-4626 vaults, account abstraction, and a fee-driven incentive layer for creator coins.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
-[![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Tests](https://github.com/4626fun/convergence-chainlink-hackathon/actions/workflows/test.yml/badge.svg)](https://github.com/4626fun/convergence-chainlink-hackathon/actions/workflows/test.yml)
 
 ## Chainlink Hackathon Submission (CRE + AI)
@@ -55,7 +54,6 @@ Expected proof markers:
   - [Architecture (Experience -> Control -> Protocol)](#1-architecture-experience---control---protocol)
   - [Deployment Lifecycle](#2-deployment-lifecycle-phased-and-guarded)
   - [Fee + Incentive Routing](#3-fee--incentive-routing)
-  - [Omnichain Topology](#4-omnichain-share-topology-base-hub)
 - [Core Protocol Components](#core-protocol-components)
 - [Supported Chains](#supported-chains-current-configuration)
 - [Quick Start (Local Development)](#quick-start-local-development)
@@ -76,7 +74,7 @@ Expected proof markers:
 
 This monorepo includes:
 
-- Smart contracts (`contracts/`) for vaults, gauges, lottery, wrappers, OFT, and deploy infra.
+- Smart contracts (`contracts/`) for vaults, gauges, lottery, wrappers, and deploy infra.
 - Frontend app (`frontend/`) using Vite + React with local/Vercel API handlers.
 - CRE automation workflows (`cre/`) for tending, reporting, settlement, and queue operations.
 - Docusaurus docs site (`apps/docs-site/`) fed by `docs/` content and generated references.
@@ -99,12 +97,12 @@ flowchart LR
     Scripts["Foundry + Ops Scripts (`script/`)"]
   end
 
-  subgraph Protocol["Protocol Plane (Base + Omnichain)"]
+  subgraph Protocol["Protocol Plane (Base)"]
     Registry["CreatorRegistry"]
     Deployer["DeploymentBatcher"]
     Vault["CreatorOVault (ERC-4626)"]
     Wrapper["CreatorOVaultWrapper"]
-    Share["CreatorShareOFT (LayerZero V2 OFT)"]
+    Share["Creator Share Token"]
     Gauge["CreatorGaugeController"]
     Lottery["CreatorLotteryManager"]
     Oracle["CreatorOracle"]
@@ -112,7 +110,6 @@ flowchart LR
   end
 
   subgraph External["External Integrations"]
-    LZ["LayerZero V2"]
     VRF["Chainlink VRF"]
     DEX["DEX + CCA Launch Surface"]
   end
@@ -134,7 +131,6 @@ flowchart LR
   Gauge --> Registry
   Gauge --> Vault
   Lottery --> VRF
-  Share --> LZ
 
   App -. "read status + inventory" .-> Registry
   App -. "read accounting state" .-> Vault
@@ -147,7 +143,7 @@ flowchart LR
   class User,App user;
   class API,CRE,Scripts control;
   class Registry,Deployer,Vault,Wrapper,Share,Gauge,Lottery,Oracle,Strategies protocol;
-  class LZ,VRF,DEX external;
+  class VRF,DEX external;
 ```
 
 ### 2) Deployment Lifecycle (Phased and Guarded)
@@ -161,7 +157,7 @@ flowchart TD
   Identity --> Access{"Creator access gate\n(allowlist/profile checks)"}
   Access --> Salt["Derive deterministic addresses\n(versioned CREATE2 salts)"]
 
-  Salt --> P1["Phase 1\nDeploy vault + wrapper + OFT"]
+  Salt --> P1["Phase 1\nDeploy vault + wrapper + share token"]
   P1 --> P2Core["Phase 2 Core\nDeploy gauge + strategy + oracle"]
   P2Core --> P2Final["Phase 2 Finalize\nRegister + wire + configure"]
   P2Final --> P3["Phase 3\nOptional strategy/post-config"]
@@ -219,45 +215,13 @@ flowchart LR
   class Untaxed,Vault neutral;
 ```
 
-### 4) Omnichain Share Topology (Base Hub)
-
-4626 is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
-
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
-flowchart LR
-  Base["Base (Hub)\nCore deployment + accounting"]
-
-  Eth["Ethereum\n(1 / 30101)"]
-  Arb["Arbitrum\n(42161 / 30110)"]
-  BSC["BSC\n(56 / 30102)"]
-  Avax["Avalanche\n(43114 / 30106)"]
-  Monad["Monad\n(10143 / 30390)"]
-  Sonic["Sonic\n(146 / 30332)"]
-  Hyper["HyperEVM\n(999 / 30275)"]
-
-  Base <--> |OFT messaging| Eth
-  Base <--> |OFT messaging| Arb
-  Base <--> |OFT messaging| BSC
-  Base <--> |OFT messaging| Avax
-  Base <--> |OFT messaging| Monad
-  Base <--> |OFT messaging| Sonic
-  Base <--> |OFT messaging| Hyper
-
-  classDef hub fill:#DCFCE7,stroke:#16A34A,stroke-width:2.5px,color:#14532D;
-  classDef satellite fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
-  class Base hub;
-  class Eth,Arb,BSC,Avax,Monad,Sonic,Hyper satellite;
-```
-
 ## Core Protocol Components
 
 | Component | Role |
 |-----------|------|
 | `CreatorRegistry` | Canonical registry of creator coin -> vault stack mappings and chain config |
 | `CreatorOVault` | ERC-4626 vault for creator coin deposits and strategy accounting |
-| `CreatorOVaultWrapper` | Wraps vault shares into transportable OFT-compatible share form |
-| `CreatorShareOFT` | LayerZero V2 OFT share token with DEX-aware fee hooks |
+| `CreatorOVaultWrapper` | Wraps vault shares into the app's tradeable share representation |
 | `CreatorGaugeController` | Receives and routes trading-fee proceeds to downstream sinks |
 | `CreatorLotteryManager` | Executes lottery odds/payout flow with VRF randomness |
 | `CreatorOracle` | Price and accounting inputs for vault/share mechanics |
@@ -267,16 +231,16 @@ flowchart LR
 
 Source of truth: `docs/chains.md`.
 
-| Network | Chain ID | LayerZero Endpoint ID | Status |
-|---------|----------|-----------------------|--------|
-| Base | 8453 | 30184 | Hub chain |
-| Ethereum | 1 | 30101 | Configured |
-| Arbitrum | 42161 | 30110 | Configured |
-| BSC | 56 | 30102 | Configured |
-| Avalanche | 43114 | 30106 | Configured |
-| Monad | 10143 | 30390 | Configured |
-| Sonic | 146 | 30332 | Configured |
-| HyperEVM | 999 | 30275 | Configured |
+| Network | Chain ID | Status |
+|---------|----------|--------|
+| Base | 8453 | Hub chain |
+| Ethereum | 1 | Configured |
+| Arbitrum | 42161 | Configured |
+| BSC | 56 | Configured |
+| Avalanche | 43114 | Configured |
+| Monad | 10143 | Configured |
+| Sonic | 146 | Configured |
+| HyperEVM | 999 | Configured |
 
 ## Quick Start (Local Development)
 
