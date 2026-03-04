@@ -1,4 +1,4 @@
-# 4626.fun
+# Convergence | A Chainlink Hackathon
 
 4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
 It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
@@ -6,11 +6,11 @@ It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
-[![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
+[![Tests](https://github.com/4626fun/convergence-chainlink-hackathon/actions/workflows/test.yml/badge.svg)](https://github.com/4626fun/convergence-chainlink-hackathon/actions/workflows/test.yml)
 
 ## Chainlink Hackathon Submission (CRE + AI)
 
-This public repo is a scoped submission mirror for the Chainlink hackathon.
+This public repo is the scoped Chainlink hackathon submission for the 4626.fun stack.
 
 - Tracks covered:
   - **DeFi & Tokenization**
@@ -28,6 +28,7 @@ Submission links:
   - [`docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`](docs/hackathon/evidence/cre-payout-integrity-local-simulation.md)
   - [`docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`](docs/hackathon/evidence/cre-keepr-queue-local-simulation.md)
 - 3-5 minute video runbook: [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md)
+- Public demo video (replace with published URL before final submission): `TBD`
 
 Run the exact simulations (from `cre/cre-workflows`):
 
@@ -289,7 +290,7 @@ Source of truth: `docs/chains.md`.
 ### 1) Clone and install
 
 ```bash
-git clone https://github.com/wenakita/4626.git
+git clone https://github.com/4626fun/convergence-chainlink-hackathon.git
 cd 4626
 
 # root
