@@ -1,4 +1,4 @@
-# Convergence | A Chainlink Hackathon
+# Converge | A Chainlink Hackathon Submission
 
 4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
 It combines ERC-4626 vaults, account abstraction, and a fee-driven incentive layer for creator coins.
