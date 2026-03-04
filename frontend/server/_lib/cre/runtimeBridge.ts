@@ -79,6 +79,10 @@ export type RuntimeAuthResult =
   | { ok: true; correlationId: string }
   | { ok: false; status: number; error: string; correlationId: string }
 
+type RuntimeAuthOptions = {
+  allowUnsignedWhenHmacConfigured?: boolean
+}
+
 type ExecuteWorkflowInput = {
   workflowId: string
   input: Record<string, unknown>
@@ -114,6 +118,10 @@ function stableClone(value: unknown): unknown {
 
 function stableJsonStringify(value: unknown): string {
   return JSON.stringify(stableClone(value))
+}
+
+function canonicalJsonDigest(value: unknown): string {
+  return createHash("sha256").update(stableJsonStringify(value), "utf8").digest("hex")
 }
 
 function base64UrlEncode(input: string | Uint8Array): string {
@@ -196,7 +204,11 @@ function mapDecisionRow(row: DecisionRow): RuntimeDecision {
   }
 }
 
-export async function authenticateRuntimeRequest(req: VercelRequest, body: unknown): Promise<RuntimeAuthResult> {
+export async function authenticateRuntimeRequest(
+  req: VercelRequest,
+  body: unknown,
+  options: RuntimeAuthOptions = {},
+): Promise<RuntimeAuthResult> {
   const correlationId = parseHeader(req, "x-correlation-id") ?? `cre-runtime-${randomUUID()}`
   const expectedApiKey = process.env.KEEPR_API_KEY
   if (!expectedApiKey) {
@@ -213,16 +225,24 @@ export async function authenticateRuntimeRequest(req: VercelRequest, body: unkno
     return { ok: true, correlationId }
   }
 
+  const allowUnsignedDefault =
+    (process.env.CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED ?? "false").toLowerCase() === "true"
+  const allowUnsignedWhenHmacConfigured =
+    options.allowUnsignedWhenHmacConfigured ?? allowUnsignedDefault
+
   const tsRaw = parseHeader(req, "x-cre-timestamp")
   const nonce = parseHeader(req, "x-cre-nonce")
   const signatureRaw = parseHeader(req, "x-cre-signature")
   if (!tsRaw || !nonce || !signatureRaw) {
-    logger.warn("CRE runtime request accepted without HMAC signature", {
-      correlationId,
-      method: req.method,
-      path: req.url,
-    })
-    return { ok: true, correlationId }
+    if (allowUnsignedWhenHmacConfigured) {
+      logger.warn("CRE runtime request accepted without HMAC signature", {
+        correlationId,
+        method: req.method,
+        path: req.url,
+      })
+      return { ok: true, correlationId }
+    }
+    return { ok: false, status: 401, error: "Missing runtime request signature headers", correlationId }
   }
 
   const timestampMs = Number(tsRaw)
@@ -260,38 +280,49 @@ export async function storeRuntimeRecord(input: RuntimeRecordInput): Promise<{ r
 
   const source = input.source ?? "cre"
   const correlationId = input.correlationId ?? null
-  const result = await db.sql`
-    WITH upsert AS (
-      INSERT INTO cre_runtime_records (
-        workflow, kind, idempotency_key, payload_json, source, correlation_id
-      ) VALUES (
-        ${input.workflow},
-        ${input.kind},
-        ${input.idempotencyKey},
-        ${input.payload},
-        ${source},
-        ${correlationId}
-      )
-      ON CONFLICT (workflow, kind, idempotency_key)
-      DO UPDATE SET
-        payload_json = EXCLUDED.payload_json,
-        source = EXCLUDED.source,
-        correlation_id = EXCLUDED.correlation_id,
-        updated_at = NOW()
-      RETURNING
-        id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at,
-        (xmax = 0) AS inserted
+  const insertResult = await db.sql`
+    INSERT INTO cre_runtime_records (
+      workflow, kind, idempotency_key, payload_json, source, correlation_id
+    ) VALUES (
+      ${input.workflow},
+      ${input.kind},
+      ${input.idempotencyKey},
+      ${input.payload},
+      ${source},
+      ${correlationId}
     )
-    SELECT * FROM upsert LIMIT 1;
+    ON CONFLICT (workflow, kind, idempotency_key) DO NOTHING
+    RETURNING id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at;
   `
 
-  const row = result.rows[0] as (RuntimeRow & { inserted: boolean }) | undefined
-  if (!row) throw new Error("runtime_record_upsert_failed")
-  return { record: mapRuntimeRow(row), inserted: Boolean(row.inserted) }
+  const insertedRow = insertResult.rows[0] as RuntimeRow | undefined
+  if (insertedRow) {
+    return { record: mapRuntimeRow(insertedRow), inserted: true }
+  }
+
+  const existingResult = await db.sql`
+    SELECT id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at
+    FROM cre_runtime_records
+    WHERE workflow = ${input.workflow}
+      AND kind = ${input.kind}
+      AND idempotency_key = ${input.idempotencyKey}
+    LIMIT 1;
+  `
+  const existingRow = existingResult.rows[0] as RuntimeRow | undefined
+  if (!existingRow) throw new Error("runtime_record_upsert_failed")
+
+  const existingDigest = canonicalJsonDigest(existingRow.payload_json)
+  const incomingDigest = canonicalJsonDigest(input.payload)
+  if (existingDigest !== incomingDigest) {
+    throw new Error("runtime_record_idempotency_conflict")
+  }
+
+  return { record: mapRuntimeRow(existingRow), inserted: false }
 }
 
 export async function listRuntimeRecords(params: {
   kind?: string
+  workflow?: string
   limit?: number
 }): Promise<RuntimeRecord[]> {
   await ensureCreRuntimeSchema()
@@ -300,11 +331,30 @@ export async function listRuntimeRecords(params: {
 
   const limit = Math.max(1, Math.min(100, params.limit ?? 20))
   const hasKind = typeof params.kind === "string" && params.kind.trim().length > 0
-  const rows = hasKind
+  const hasWorkflow = typeof params.workflow === "string" && params.workflow.trim().length > 0
+
+  const rows = hasKind && hasWorkflow
     ? await db.sql`
         SELECT id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at
         FROM cre_runtime_records
         WHERE kind = ${params.kind!.trim()}
+          AND workflow = ${params.workflow!.trim()}
+        ORDER BY created_at DESC
+        LIMIT ${limit};
+      `
+    : hasKind
+    ? await db.sql`
+        SELECT id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at
+        FROM cre_runtime_records
+        WHERE kind = ${params.kind!.trim()}
+        ORDER BY created_at DESC
+        LIMIT ${limit};
+      `
+    : hasWorkflow
+    ? await db.sql`
+        SELECT id, workflow, kind, idempotency_key, payload_json, source, correlation_id, created_at
+        FROM cre_runtime_records
+        WHERE workflow = ${params.workflow!.trim()}
         ORDER BY created_at DESC
         LIMIT ${limit};
       `
@@ -325,33 +375,42 @@ export async function storeRuntimeDecision(input: RuntimeDecisionInput): Promise
 
   const status = input.status ?? "stored"
   const correlationId = input.correlationId ?? null
-  const result = await db.sql`
-    WITH upsert AS (
-      INSERT INTO cre_runtime_decisions (
-        workflow, idempotency_key, decision_json, status, correlation_id
-      ) VALUES (
-        ${input.workflow},
-        ${input.idempotencyKey},
-        ${input.decision},
-        ${status},
-        ${correlationId}
-      )
-      ON CONFLICT (workflow, idempotency_key)
-      DO UPDATE SET
-        decision_json = EXCLUDED.decision_json,
-        status = EXCLUDED.status,
-        correlation_id = EXCLUDED.correlation_id,
-        updated_at = NOW()
-      RETURNING
-        id, workflow, idempotency_key, decision_json, status, correlation_id, created_at,
-        (xmax = 0) AS inserted
+  const insertResult = await db.sql`
+    INSERT INTO cre_runtime_decisions (
+      workflow, idempotency_key, decision_json, status, correlation_id
+    ) VALUES (
+      ${input.workflow},
+      ${input.idempotencyKey},
+      ${input.decision},
+      ${status},
+      ${correlationId}
     )
-    SELECT * FROM upsert LIMIT 1;
+    ON CONFLICT (workflow, idempotency_key) DO NOTHING
+    RETURNING id, workflow, idempotency_key, decision_json, status, correlation_id, created_at;
   `
 
-  const row = result.rows[0] as (DecisionRow & { inserted: boolean }) | undefined
-  if (!row) throw new Error("runtime_decision_upsert_failed")
-  return { decision: mapDecisionRow(row), inserted: Boolean(row.inserted) }
+  const insertedRow = insertResult.rows[0] as DecisionRow | undefined
+  if (insertedRow) {
+    return { decision: mapDecisionRow(insertedRow), inserted: true }
+  }
+
+  const existingResult = await db.sql`
+    SELECT id, workflow, idempotency_key, decision_json, status, correlation_id, created_at
+    FROM cre_runtime_decisions
+    WHERE workflow = ${input.workflow}
+      AND idempotency_key = ${input.idempotencyKey}
+    LIMIT 1;
+  `
+  const existingRow = existingResult.rows[0] as DecisionRow | undefined
+  if (!existingRow) throw new Error("runtime_decision_upsert_failed")
+
+  const existingDigest = canonicalJsonDigest(existingRow.decision_json)
+  const incomingDigest = canonicalJsonDigest(input.decision)
+  if (existingDigest !== incomingDigest) {
+    throw new Error("runtime_decision_idempotency_conflict")
+  }
+
+  return { decision: mapDecisionRow(existingRow), inserted: false }
 }
 
 export async function maybeEnqueueRuntimeAction(input: RuntimeEnqueueActionInput): Promise<number> {
@@ -368,7 +427,12 @@ export async function maybeEnqueueRuntimeAction(input: RuntimeEnqueueActionInput
 function resolveGatewayUrl(): string {
   const value = (process.env.CRE_GATEWAY_URL ?? "").trim()
   if (!value) throw new Error("cre_gateway_url_not_configured")
-  return value.replace(/\/$/, "")
+  const normalized = value.replace(/\/$/, "")
+  const isLocalHttp = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized)
+  if (!isLocalHttp && !normalized.startsWith("https://")) {
+    throw new Error("cre_gateway_url_must_use_https")
+  }
+  return normalized
 }
 
 function resolveTriggerPrivateKey(): `0x${string}` {

@@ -27,6 +27,17 @@ type TriggerResponse = {
   response: unknown
 }
 
+function parseAllowedWorkflowIds(): Set<string> {
+  const raw = (process.env.CRE_RUNTIME_ALLOWED_TRIGGER_WORKFLOW_IDS ?? "").trim()
+  if (!raw) return new Set<string>()
+  const values = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => normalizeWorkflowId(value))
+  return new Set<string>(values)
+}
+
 function nonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
@@ -52,7 +63,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (await readJsonBody<TriggerBody>(req)) ?? {}
-  const auth = await authenticateRuntimeRequest(req, body)
+  const auth = await authenticateRuntimeRequest(req, body, {
+    allowUnsignedWhenHmacConfigured: true,
+  })
   if (!auth.ok) {
     return res.status(auth.status).json({
       success: false,
@@ -74,6 +87,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({
       success: false,
       error: "workflowId must be a 64-character hex string",
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const allowedWorkflowIds = parseAllowedWorkflowIds()
+  if (allowedWorkflowIds.size > 0 && !allowedWorkflowIds.has(workflowId)) {
+    return res.status(403).json({
+      success: false,
+      error: "workflowId is not allowed",
     } satisfies ApiEnvelope<never>)
   }
 

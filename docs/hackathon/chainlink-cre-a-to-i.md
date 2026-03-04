@@ -270,6 +270,11 @@ export KEEPR_PRIVATE_KEY_VALUE="0x0000000000000000000000000000000000000000000000
 export CRE_RUNTIME_WEBHOOK_HMAC_SECRET_VALUE="local-hmac-secret"
 export AWS_ACCESS_KEY_ID_VALUE="AKIALOCALTEST"
 export AWS_SECRET_ACCESS_KEY_VALUE="local-secret"
+
+# Recommended hardening toggles for staging/production bridge:
+export CRE_RUNTIME_ENFORCE_HMAC="true"
+# Optional temporary migration override (disable before final launch):
+# export CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED="true"
 ```
 
 ### 4) Start local mock bridge
@@ -327,6 +332,9 @@ cre secrets set KEEPR_PRIVATE_KEY
 cre secrets set CRE_RUNTIME_WEBHOOK_HMAC_SECRET
 cre secrets set AWS_ACCESS_KEY_ID
 cre secrets set AWS_SECRET_ACCESS_KEY
+
+# (optional) restrict /api/cre/runtime/trigger to approved workflow IDs
+export CRE_RUNTIME_ALLOWED_TRIGGER_WORKFLOW_IDS="<64-hex-workflow-id-1>,<64-hex-workflow-id-2>"
 ```
 
 ### 8) Run backend bridge

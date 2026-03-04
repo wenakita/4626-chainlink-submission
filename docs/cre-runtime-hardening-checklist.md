@@ -9,7 +9,12 @@
   - `AWS_SECRET_ACCESS_KEY`
 - Keep local-only simulation values in `cre/cre-workflows/.env` (never commit real values).
 - Require `Authorization: Bearer ${KEEPR_API_KEY}` for all bridge endpoints.
-- Enable optional HMAC header verification (`x-cre-timestamp`, `x-cre-nonce`, `x-cre-signature`) when clients support signed requests.
+- Enable strict HMAC verification for runtime ingest/decision endpoints:
+  - `CRE_RUNTIME_ENFORCE_HMAC=true`
+  - Request headers: `x-cre-timestamp`, `x-cre-nonce`, `x-cre-signature`
+- If temporary backward-compatibility is needed while onboarding clients, set:
+  - `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED=true`
+  - Remove this override before production launch.
 - Rotate `CRE_HTTP_TRIGGER_PRIVATE_KEY` on a regular schedule and after incidents.
 
 ## 2) Replay protection and idempotency
@@ -18,6 +23,7 @@
 - Persist idempotency in DB unique keys:
   - `cre_runtime_records (workflow, kind, idempotency_key)`
   - `cre_runtime_decisions (workflow, idempotency_key)`
+- Keep idempotency rows immutable on conflict (do not overwrite payload/decision on duplicate keys).
 - Enforce nonce one-time use in `cre_runtime_replay_nonces`.
 - Use deterministic idempotency keys derived from stable payload hashes.
 
@@ -33,6 +39,17 @@
   - decision inserts
   - trigger failures by status code class
 
+## 3.5) Policy guardrails
+
+- Enforce allowed workflow/kind pairs on ingest:
+  - `runtime-indexer-block:block`
+  - `runtime-indexer-data-fetch:metrics`
+  - `runtime-reference-feeds:feeds`
+- Enforce allowed decision workflow(s):
+  - `runtime-orchestrator`
+- Restrict trigger dispatch with workflow allowlist in production:
+  - `CRE_RUNTIME_ALLOWED_TRIGGER_WORKFLOW_IDS=<comma-separated-64-byte-ids>`
+
 ## 4) Reorg and finality strategy
 
 - Feed reads use `LAST_FINALIZED_BLOCK_NUMBER` for deterministic finality.
@@ -40,6 +57,7 @@
   - store `blockNumber`, `blockHash`, transaction hash
   - avoid irreversible side effects until checkpoint progression confirms expected sequence.
 - Keep orchestrator checkpoint advancement monotonic (`next = max(previous, latest)`).
+- Scope orchestrator reads by source workflow and process block windows (`kind=block`, workflow filter) rather than trusting a single unscoped latest record.
 
 ## 5) Retries, rate limits, and backoff
 

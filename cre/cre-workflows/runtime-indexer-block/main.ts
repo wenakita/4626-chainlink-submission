@@ -74,11 +74,6 @@ type BlockSummary = {
 
 type IngestResponse = {
   success: boolean
-  data?: {
-    stored: boolean
-    inserted: boolean
-    idempotencyKey: string
-  }
   error?: string
 }
 
@@ -141,12 +136,12 @@ function buildSummary(config: Config, payload: WebhookPayload): BlockSummary {
 function sinkSummary(
   runtime: Runtime<Config>,
   summary: BlockSummary,
-): IngestResponse {
+): boolean {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
   const httpClient = new HTTPClient()
   return runtime.runInNodeMode(
-    (nodeRuntime: NodeRuntime<Config>) =>
-      postJson<Config, IngestResponse>(
+    (nodeRuntime: NodeRuntime<Config>) => {
+      const response = postJson<Config, IngestResponse>(
         nodeRuntime,
         httpClient,
         apiKey,
@@ -158,7 +153,9 @@ function sinkSummary(
           payload: summary,
           source: "cre-runtime-indexer-block",
         },
-      ),
+      )
+      return response.success
+    },
     consensusIdenticalAggregation(),
   )().result()
 }
@@ -175,16 +172,15 @@ const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string =
     return JSON.stringify({ ...summary, sink: "disabled" }, null, 2)
   }
 
-  const sinkResponse = sinkSummary(runtime, summary)
-  if (!sinkResponse.success) {
-    throw new Error(`runtime_ingest_failed:${sinkResponse.error ?? "unknown_error"}`)
+  const sinkAccepted = sinkSummary(runtime, summary)
+  if (!sinkAccepted) {
+    throw new Error("runtime_ingest_failed")
   }
 
   return JSON.stringify(
     {
       ...summary,
       sink: "accepted",
-      inserted: sinkResponse.data?.inserted ?? false,
     },
     null,
     2,

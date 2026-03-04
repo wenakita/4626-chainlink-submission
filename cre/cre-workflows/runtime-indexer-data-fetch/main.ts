@@ -40,11 +40,6 @@ type GraphSnapshot = {
 
 type IngestResponse = {
   success: boolean
-  data?: {
-    stored: boolean
-    inserted: boolean
-    idempotencyKey: string
-  }
   error?: string
 }
 
@@ -121,9 +116,9 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
   }
 
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  const sinkResponse = runtime.runInNodeMode(
-    (nodeRuntime: NodeRuntime<Config>) =>
-      postJson<Config, IngestResponse>(
+  const sinkAccepted = runtime.runInNodeMode(
+    (nodeRuntime: NodeRuntime<Config>) => {
+      const response = postJson<Config, IngestResponse>(
         nodeRuntime,
         httpClient,
         apiKey,
@@ -135,19 +130,20 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
           payload: summary,
           source: "cre-runtime-indexer-data-fetch",
         },
-      ),
+      )
+      return response.success
+    },
     consensusIdenticalAggregation(),
   )().result()
 
-  if (!sinkResponse.success) {
-    throw new Error(`runtime_ingest_failed:${sinkResponse.error ?? "unknown_error"}`)
+  if (!sinkAccepted) {
+    throw new Error("runtime_ingest_failed")
   }
 
   return JSON.stringify(
     {
       ...summary,
       sink: "accepted",
-      inserted: sinkResponse.data?.inserted ?? false,
     },
     null,
     2,

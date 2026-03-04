@@ -70,7 +70,10 @@ Narration points:
 Open:
 - `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`
 - `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`
 - `docs/hackathon/chainlink-cre-submission.md`
+- `docs/hackathon/chainlink-cre-a-to-i.md`
 
 Say:
 1. “These are the simulation-first proof artifacts for judges.”

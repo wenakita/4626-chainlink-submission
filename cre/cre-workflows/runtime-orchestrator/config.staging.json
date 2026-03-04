@@ -2,6 +2,7 @@
   "schedule": "0 */1 * * * *",
   "apiBaseUrl": "https://4626.fun/api",
   "workflowName": "runtime-orchestrator",
+  "blockSourceWorkflow": "runtime-indexer-block",
   "checkpointIntervalSeconds": 120,
   "minMatchedTransactionsForAction": 1,
   "sinkEnabled": true,

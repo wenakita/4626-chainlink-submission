@@ -2,6 +2,7 @@
   "schedule": "*/30 * * * * *",
   "apiBaseUrl": "http://127.0.0.1:8789/api",
   "workflowName": "runtime-orchestrator",
+  "blockSourceWorkflow": "runtime-indexer-block",
   "checkpointIntervalSeconds": 60,
   "minMatchedTransactionsForAction": 1,
   "sinkEnabled": false,

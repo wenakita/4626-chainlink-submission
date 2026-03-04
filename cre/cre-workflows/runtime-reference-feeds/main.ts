@@ -70,11 +70,6 @@ type Config = {
 
 type IngestResponse = {
   success: boolean
-  data?: {
-    stored: boolean
-    inserted: boolean
-    idempotencyKey: string
-  }
   error?: string
 }
 
@@ -274,13 +269,16 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
     orderedMvrFeeds.map((feed) => readMvrFeed(runtime, evmClient!, feed))
 
   const emittedAt = runtime.now().toISOString()
-  const payload = {
-    emittedAt,
+  const valueSnapshot = {
     chainName: runtime.config.chainName,
     feeds,
     mvrFeeds,
   }
-  const digest = sha256Hex(stableJsonStringify(payload))
+  const digest = sha256Hex(stableJsonStringify(valueSnapshot))
+  const payload = {
+    emittedAt,
+    ...valueSnapshot,
+  }
 
   runtime.log(
     `Reference feeds snapshot feeds=${feeds.length} mvrFeeds=${mvrFeeds.length} digest=${digest.slice(0, 12)}`,
@@ -292,9 +290,9 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
 
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
   const httpClient = new HTTPClient()
-  const sinkResponse = runtime.runInNodeMode(
-    (nodeRuntime: NodeRuntime<Config>) =>
-      postJson<Config, IngestResponse>(
+  const sinkAccepted = runtime.runInNodeMode(
+    (nodeRuntime: NodeRuntime<Config>) => {
+      const response = postJson<Config, IngestResponse>(
         nodeRuntime,
         httpClient,
         apiKey,
@@ -306,12 +304,14 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
           payload,
           source: "cre-runtime-reference-feeds",
         },
-      ),
+      )
+      return response.success
+    },
     consensusIdenticalAggregation(),
   )().result()
 
-  if (!sinkResponse.success) {
-    throw new Error(`runtime_ingest_failed:${sinkResponse.error ?? "unknown_error"}`)
+  if (!sinkAccepted) {
+    throw new Error("runtime_ingest_failed")
   }
 
   return JSON.stringify(
@@ -319,7 +319,6 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
       ...payload,
       digest,
       sink: "accepted",
-      inserted: sinkResponse.data?.inserted ?? false,
     },
     null,
     2,

@@ -33,6 +33,12 @@ type IngestGetResponse = {
   count: number
 }
 
+const ALLOWED_INGEST_PAIRS = new Set<string>([
+  "runtime-indexer-block:block",
+  "runtime-indexer-data-fetch:metrics",
+  "runtime-reference-feeds:feeds",
+])
+
 function nonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
@@ -49,7 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = req.method === "POST" ? ((await readJsonBody<IngestBody>(req)) ?? {}) : {}
-  const auth = await authenticateRuntimeRequest(req, body)
+  const enforceHmac = (process.env.CRE_RUNTIME_ENFORCE_HMAC ?? "false").toLowerCase() === "true"
+  const auth = await authenticateRuntimeRequest(req, body, {
+    allowUnsignedWhenHmacConfigured: req.method === "GET" || !enforceHmac,
+  })
   if (!auth.ok) {
     return res.status(auth.status).json({
       success: false,
@@ -60,9 +69,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === "GET") {
       const kind = nonEmptyString(req.query.kind)
+      const workflow = nonEmptyString(req.query.workflow)
       const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : NaN
       const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20
-      const records = await listRuntimeRecords({ kind: kind ?? undefined, limit })
+      const records = await listRuntimeRecords({
+        kind: kind ?? undefined,
+        workflow: workflow ?? undefined,
+        limit,
+      })
       return res.status(200).json({
         success: true,
         data: { records, count: records.length },
@@ -79,11 +93,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<never>)
     }
 
+    if (!ALLOWED_INGEST_PAIRS.has(`${workflow}:${kind}`)) {
+      return res.status(400).json({
+        success: false,
+        error: "workflow/kind combination is not allowed",
+      } satisfies ApiEnvelope<never>)
+    }
+
+    const payload =
+      body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
+        ? body.payload
+        : null
+    if (!payload) {
+      return res.status(400).json({
+        success: false,
+        error: "payload must be an object",
+      } satisfies ApiEnvelope<never>)
+    }
+
     const stored = await storeRuntimeRecord({
       workflow,
       kind,
       idempotencyKey,
-      payload: body.payload ?? {},
+      payload,
       source: nonEmptyString(body.source) ?? "cre",
       correlationId: auth.correlationId,
     })

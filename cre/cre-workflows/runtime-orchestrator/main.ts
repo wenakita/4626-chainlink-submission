@@ -18,6 +18,7 @@ type Config = {
   schedule: string
   apiBaseUrl: string
   workflowName: string
+  blockSourceWorkflow?: string
   checkpointIntervalSeconds: number
   minMatchedTransactionsForAction: number
   sinkEnabled?: boolean
@@ -48,6 +49,7 @@ type IngestListResponse = {
   success: boolean
   data?: {
     records?: Array<{
+      workflow?: string
       payload?: {
         blockNumber?: number
         matchedTransactions?: number
@@ -60,12 +62,6 @@ type IngestListResponse = {
 
 type DecisionResponse = {
   success: boolean
-  data?: {
-    stored: boolean
-    inserted: boolean
-    idempotencyKey: string
-    actionId?: number
-  }
   error?: string
 }
 
@@ -80,7 +76,6 @@ type OrchestratorResult = {
   shouldAct: boolean
   idempotencyKey: string
   sink: "disabled" | "accepted"
-  actionId?: number
 }
 
 function parseManualPayload(payload: HTTPPayload): ManualPayload {
@@ -115,10 +110,11 @@ function slotKey(now: Date, intervalSeconds: number): string {
   return `slot:${slot}`
 }
 
-function fetchLatestBlockSnapshot(
+function fetchBlockWindowSnapshot(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
+  minBlockExclusive: number,
 ): { blockNumber: number; matchedTransactions: number } | null {
   if (typeof nodeRuntime.config.mockLatestBlockNumber === "number") {
     return {
@@ -127,21 +123,31 @@ function fetchLatestBlockSnapshot(
     }
   }
 
+  const sourceWorkflow = nodeRuntime.config.blockSourceWorkflow ?? "runtime-indexer-block"
   const response = getJson<Config, IngestListResponse>(
     nodeRuntime,
     httpClient,
     apiKey,
-    "/cre/runtime/ingest?kind=block&limit=1",
+    `/cre/runtime/ingest?kind=block&workflow=${encodeURIComponent(sourceWorkflow)}&limit=100`,
   )
   if (!response.success) return null
-  const first = response.data?.records?.[0]?.payload
-  const blockNumber = toFiniteNumber(first?.blockNumber)
-  if (blockNumber === null) return null
 
-  return {
-    blockNumber: Math.max(0, Math.floor(blockNumber)),
-    matchedTransactions: Math.max(0, Math.floor(toFiniteNumber(first?.matchedTransactions) ?? 0)),
+  let latestBlockNumber = minBlockExclusive
+  let matchedTransactions = 0
+  for (const record of response.data?.records ?? []) {
+    const blockNumber = toFiniteNumber(record?.payload?.blockNumber)
+    if (blockNumber === null) continue
+    const normalizedBlockNumber = Math.max(0, Math.floor(blockNumber))
+    if (normalizedBlockNumber <= minBlockExclusive) continue
+    latestBlockNumber = Math.max(latestBlockNumber, normalizedBlockNumber)
+    matchedTransactions += Math.max(
+      0,
+      Math.floor(toFiniteNumber(record?.payload?.matchedTransactions) ?? 0),
+    )
   }
+  if (latestBlockNumber <= minBlockExclusive) return null
+
+  return { blockNumber: latestBlockNumber, matchedTransactions }
 }
 
 function runOrchestration(
@@ -154,16 +160,6 @@ function runOrchestration(
   const idempotencyKey = `${runtime.config.workflowName}:${checkpointSuffix}`
   const httpClient = new HTTPClient()
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-
-  const latestFromSource = runtime.runInNodeMode(
-    (nodeRuntime: NodeRuntime<Config>) => fetchLatestBlockSnapshot(nodeRuntime, httpClient, apiKey),
-    consensusIdenticalAggregation(),
-  )().result()
-
-  const manualLatestBlock = normalizedLatestBlockFromManual(manual)
-  const manualMatched = normalizedMatchedFromManual(manual)
-  const latestBlockNumber = manualLatestBlock ?? latestFromSource?.blockNumber ?? 0
-  const matchedTransactions = manualMatched ?? latestFromSource?.matchedTransactions ?? 0
   const awsCreds: AwsCredentials | null = runtime.config.kvDisabled
     ? null
     : {
@@ -180,21 +176,31 @@ function runOrchestration(
         consensusMedianAggregation<number>(),
       )().result()
 
+  const latestFromSource = runtime.runInNodeMode(
+    (nodeRuntime: NodeRuntime<Config>) =>
+      fetchBlockWindowSnapshot(nodeRuntime, httpClient, apiKey, previousCheckpoint),
+    consensusIdenticalAggregation(),
+  )().result()
+
+  const manualLatestBlock = normalizedLatestBlockFromManual(manual)
+  const manualMatched = normalizedMatchedFromManual(manual)
+  const latestBlockNumber = manualLatestBlock ?? latestFromSource?.blockNumber ?? previousCheckpoint
+  const matchedTransactions = manualMatched ?? latestFromSource?.matchedTransactions ?? 0
+
   const nextCheckpoint = Math.max(previousCheckpoint, latestBlockNumber)
   const shouldAct =
     nextCheckpoint > previousCheckpoint &&
     matchedTransactions >= Math.max(0, runtime.config.minMatchedTransactionsForAction)
 
-  if (!runtime.config.kvDisabled) {
-    runtime.runInNodeMode(
-      (nodeRuntime: NodeRuntime<Config>) =>
-        writeKvText(nodeRuntime, httpClient, awsCreds!, String(nextCheckpoint), now),
-      consensusIdenticalAggregation(),
-    )().result()
-  }
-
   const reason = manual?.reason?.trim() || (shouldAct ? "checkpoint_advanced" : "no_advance")
   if (runtime.config.sinkEnabled === false) {
+    if (!runtime.config.kvDisabled) {
+      runtime.runInNodeMode(
+        (nodeRuntime: NodeRuntime<Config>) =>
+          writeKvText(nodeRuntime, httpClient, awsCreds!, String(nextCheckpoint), now),
+        consensusIdenticalAggregation(),
+      )().result()
+    }
     return {
       workflow: runtime.config.workflowName,
       trigger,
@@ -226,9 +232,9 @@ function runOrchestration(
         }
       : undefined
 
-  const sinkResponse = runtime.runInNodeMode(
-    (nodeRuntime: NodeRuntime<Config>) =>
-      postJson<Config, DecisionResponse>(
+  const sinkAccepted = runtime.runInNodeMode(
+    (nodeRuntime: NodeRuntime<Config>) => {
+      const response = postJson<Config, DecisionResponse>(
         nodeRuntime,
         httpClient,
         apiKey,
@@ -248,12 +254,22 @@ function runOrchestration(
           },
           ...(maybeEnqueue ? { enqueueAction: maybeEnqueue } : {}),
         },
-      ),
+      )
+      return response.success
+    },
     consensusIdenticalAggregation(),
   )().result()
 
-  if (!sinkResponse.success) {
-    throw new Error(`runtime_decision_sink_failed:${sinkResponse.error ?? "unknown_error"}`)
+  if (!sinkAccepted) {
+    throw new Error("runtime_decision_sink_failed")
+  }
+
+  if (!runtime.config.kvDisabled) {
+    runtime.runInNodeMode(
+      (nodeRuntime: NodeRuntime<Config>) =>
+        writeKvText(nodeRuntime, httpClient, awsCreds!, String(nextCheckpoint), now),
+      consensusIdenticalAggregation(),
+    )().result()
   }
 
   return {
@@ -267,7 +283,6 @@ function runOrchestration(
     shouldAct,
     idempotencyKey,
     sink: "accepted",
-    ...(sinkResponse.data?.actionId ? { actionId: sinkResponse.data.actionId } : {}),
   }
 }
 

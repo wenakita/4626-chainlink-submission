@@ -13,12 +13,14 @@ Reference templates: [smartcontractkit/cre-templates](https://github.com/smartco
 | CRE workflow orchestrates blockchain + external system and simulates successfully | `cre/cre-workflows/payout-integrity/main.ts` (EVM reads + HTTP bridge + AI advisory), `cre/cre-workflows/keepr-queue/main.ts` (HTTP orchestration), simulation logs in `docs/hackathon/evidence/` |
 | Integrates at least one blockchain with external API/system/LLM/AI | Blockchain reads via `EVMClient` in `cre/cre-workflows/payout-integrity/main.ts`; external API bridge at `frontend/api/_handlers/cre/keeper/_alert.ts`; AI endpoint at `frontend/api/_handlers/cre/keeper/_aiAssess.ts` using `frontend/server/agent/eliza/llm.ts` |
 | Successful simulation via CRE CLI | `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md` and `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md` |
+| Runtime orchestration simulations (webhook + cron + feeds + checkpoint orchestrator) | `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-indexer-data-fetch-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.md` |
 | AI-assisted CRE workflow where deterministic logic remains authoritative | Deterministic checks and alert generation in `cre/cre-workflows/payout-integrity/main.ts`; advisory AI classification in `frontend/api/_handlers/cre/keeper/_aiAssess.ts`; fallback normalization in `cre/utils/payoutIntegrityAi.ts` |
 | Solana operational workflow path is demonstrated | Solana monitor implementation `cre/actions/keepr-solana-price-monitor.action.ts`, workflow `cre/workflows/keepr-solana-price-monitor.workflow.ts`, operator command path `/cre solana` in `frontend/server/agent/eliza/plugins/cre/index.ts`, and test proof `cre/tests/keepr-solana-price-monitor.test.ts` |
 | Tests covering new behavior | `cre/tests/payoutIntegrityAi.test.ts`, `frontend/api/__tests__/creKeeperAiAssess.test.ts` |
 | Public video walkthrough (3-5 min) | Script in `docs/hackathon/video-script.md` |
 | Public source code path | Preparation runbook in `docs/hackathon/public-source-packaging.md` |
 | README includes links to files using Chainlink | `cre/README.md` section: **Files Using Chainlink** |
+| Comprehensive A-I plan, threat model, roadmap, and product-by-product strengths | `docs/hackathon/chainlink-cre-a-to-i.md` |
 
 ## Problem We Are Solving
 
@@ -114,11 +116,28 @@ cre workflow simulate ./payout-integrity --target local-simulation \
 
 cre workflow simulate ./keepr-queue --target local-simulation \
   | tee ../../docs/hackathon/evidence/cre-keepr-queue-local-simulation.log
+
+# Runtime orchestration simulation set
+cre workflow simulate runtime-indexer-block --target local-simulation --non-interactive --trigger-index 0 --http-payload @test-block.json \
+  | tee ../../docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.log
+cre workflow simulate runtime-indexer-data-fetch --target local-simulation --non-interactive --trigger-index 0 \
+  | tee ../../docs/hackathon/evidence/cre-runtime-indexer-data-fetch-local-simulation.log
+cre workflow simulate runtime-reference-feeds --target local-simulation --non-interactive --trigger-index 0 \
+  | tee ../../docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.log
+cre workflow simulate runtime-orchestrator --target local-simulation --non-interactive --trigger-index 0 \
+  | tee ../../docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.log
+cre workflow simulate runtime-orchestrator --target local-simulation --non-interactive --trigger-index 1 --http-payload @http_trigger_payload.json \
+  | tee ../../docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.log
 ```
 
 Raw CLI logs are captured as `*.log` during execution; committed submission snapshots are in:
 - `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`
 - `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-indexer-data-fetch-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`
+- `docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.md`
 
 ## Key Simulation Highlights
 

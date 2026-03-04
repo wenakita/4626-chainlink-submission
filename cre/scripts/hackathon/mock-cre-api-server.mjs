@@ -14,6 +14,7 @@ const MOCK_VAULT = {
   burnStreamAddress: '',
   groupId: 'mock-group-1',
 };
+const SOLANA_CHECKPOINTS = new Map();
 const RUNTIME_RECORDS = [];
 const RUNTIME_RECORD_KEYS = new Set();
 const RUNTIME_DECISIONS = [];
@@ -133,6 +134,62 @@ const server = createServer((req, res) => {
               ? 'Pause keeper-triggered writes and investigate immediately.'
               : 'Continue monitoring and review warnings.',
           provider: 'mock-ai',
+        },
+      });
+    }
+
+    if (method === 'POST' && path === '/api/cre/keeper/solana/reconcile') {
+      const workflow = typeof parsed?.workflow === 'string' ? parsed.workflow.trim() : '';
+      const action = typeof parsed?.action === 'string' ? parsed.action.trim() : '';
+      const checkpointKey = typeof parsed?.checkpointKey === 'string' ? parsed.checkpointKey.trim() : '';
+
+      if (!workflow || !action || !checkpointKey) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'workflow, action, and checkpointKey are required',
+        });
+      }
+
+      const stateKey = `${workflow}:${checkpointKey}`;
+      if (SOLANA_CHECKPOINTS.has(stateKey)) {
+        return sendJson(res, 200, {
+          success: true,
+          data: {
+            workflow,
+            action,
+            checkpointKey,
+            status: 'already_processed',
+            executed: false,
+            upstreamStatusCode: 200,
+            upstreamResponse: {
+              mock: true,
+              idempotent: true,
+            },
+          },
+        });
+      }
+
+      const configuredStatus = String(process.env.CRE_MOCK_SOLANA_STATUS ?? 'completed');
+      const status =
+        configuredStatus === 'failed' || configuredStatus === 'skipped_unconfigured'
+          ? configuredStatus
+          : 'completed';
+      const executed = status === 'completed';
+      SOLANA_CHECKPOINTS.set(stateKey, { status, executed });
+
+      return sendJson(res, 200, {
+        success: true,
+        data: {
+          workflow,
+          action,
+          checkpointKey,
+          status,
+          executed,
+          upstreamStatusCode: executed ? 200 : 503,
+          upstreamResponse: {
+            mock: true,
+            status,
+          },
         },
       });
     }

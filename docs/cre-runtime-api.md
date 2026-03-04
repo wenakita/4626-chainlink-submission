@@ -5,10 +5,12 @@ This document defines the minimal app bridge contract for CRE orchestration work
 ## Authentication
 
 - Base auth: `Authorization: Bearer <KEEPR_API_KEY>`
-- Optional hardened auth (if `CRE_RUNTIME_WEBHOOK_HMAC_SECRET` is configured and client supports signing):
+- Hardened auth (enable strict mode with `CRE_RUNTIME_ENFORCE_HMAC=true`):
   - `x-cre-timestamp`: Unix epoch milliseconds
   - `x-cre-nonce`: unique nonce
   - `x-cre-signature`: hex HMAC-SHA256 over `${timestamp}.${nonce}.${stableJsonBody}`
+- Transitional compatibility override (not recommended for production):
+  - `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED=true`
 
 Replay protection:
 - Nonce tracking table: `cre_runtime_replay_nonces`
@@ -19,6 +21,10 @@ Replay protection:
 - Path: `POST /api/cre/runtime/ingest`
 - Handler: `frontend/api/_handlers/cre/runtime/_ingest.ts`
 - Purpose: Receive workflow outputs (block summaries, metric snapshots, feed snapshots).
+- Policy: Allowed `(workflow, kind)` pairs are:
+  - `runtime-indexer-block:block`
+  - `runtime-indexer-data-fetch:metrics`
+  - `runtime-reference-feeds:feeds`
 
 Request body:
 
@@ -49,7 +55,7 @@ Response:
 ```
 
 Readback:
-- `GET /api/cre/runtime/ingest?kind=block&limit=1`
+- `GET /api/cre/runtime/ingest?kind=block&workflow=runtime-indexer-block&limit=100`
 - Returns latest persisted records for orchestration reads.
 
 ## Endpoint: persist decisions / optional queue enqueue
@@ -57,6 +63,7 @@ Readback:
 - Path: `POST /api/cre/runtime/decisions`
 - Handler: `frontend/api/_handlers/cre/runtime/_decisions.ts`
 - Purpose: Persist orchestration decision payloads and optionally enqueue app actions.
+- Policy: allowed workflow is currently `runtime-orchestrator`.
 
 Request body:
 
@@ -99,6 +106,8 @@ Response:
 - Path: `POST /api/cre/runtime/trigger`
 - Handler: `frontend/api/_handlers/cre/runtime/_trigger.ts`
 - Purpose: Send authenticated JSON-RPC request to CRE HTTP trigger gateway.
+- Optional trigger workflow allowlist:
+  - `CRE_RUNTIME_ALLOWED_TRIGGER_WORKFLOW_IDS=<comma-separated-64-hex-ids>`
 
 Request body:
 
