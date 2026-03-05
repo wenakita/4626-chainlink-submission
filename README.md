@@ -8,6 +8,18 @@ Converge is a scoped hackathon submission from the 4626 codebase, focused only o
 - Requirement mapping: [`docs/hackathon/chainlink-cre-submission.md`](docs/hackathon/chainlink-cre-submission.md)
 - Video script: [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md)
 - Full A-I writeup: [`docs/hackathon/chainlink-cre-a-to-i.md`](docs/hackathon/chainlink-cre-a-to-i.md)
+- Submission form copy: [`docs/hackathon/submission-form-copy.md`](docs/hackathon/submission-form-copy.md)
+- Final submission checklist: [`docs/hackathon/final-submission-checklist.md`](docs/hackathon/final-submission-checklist.md)
+
+## Judge Quickstart (2 Minutes)
+
+1. Read the requirement mapping doc: [`docs/hackathon/chainlink-cre-submission.md`](docs/hackathon/chainlink-cre-submission.md).
+2. From `cre/cre-workflows`, run:
+   - `cre workflow simulate ./payout-integrity --target local-simulation`
+   - `cre workflow simulate ./keepr-queue --target local-simulation`
+3. Open simulation proof snapshots under [`docs/hackathon/evidence/`](docs/hackathon/evidence/).
+4. Confirm Chainlink file inventory: [`cre/README.md#files-using-chainlink`](cre/README.md#files-using-chainlink).
+5. Watch the 3-5 minute walkthrough (replace `TBD` URL above before submitting).
 
 ## Project Description (Use Case + Architecture)
 
