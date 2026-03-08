@@ -4,7 +4,7 @@ Use this document as copy-paste source text for the final submission form.
 
 ## Project Name
 
-Converge | A Chainlink Hackathon Submission
+4626.fun 
 
 ## Public Repository
 
