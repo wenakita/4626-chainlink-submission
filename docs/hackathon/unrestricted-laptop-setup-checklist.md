@@ -33,31 +33,39 @@ git clone https://github.com/4626fun/convergence-chainlink-hackathon.git
 cd convergence-chainlink-hackathon
 ```
 
-## 4) Install repo dependencies
+## 4) Install workflow dependencies
+
+Install dependencies from the actual workflow package root:
 
 ```bash
-npm --prefix cre install
+npm --prefix cre/cre-workflows install
 ```
 
-## 5) Create env files
+## 5) Create the local workflow env file
 
 ```bash
 cp cre/cre-workflows/.env.example cre/cre-workflows/.env
-cp cre/secrets.example.env cre/.env
-cp frontend/.env.example frontend/.env.local
 ```
 
-## 6) Paste env values
+## 6) Fill `.env` values
 
-Use:
+Open `cre/cre-workflows/.env` and fill required values.
 
-- `docs/hackathon/submission-env-vars-and-secrets.actual.local.md`
+At minimum for local simulation, set:
 
-Paste:
+- `CRE_ETH_PRIVATE_KEY`
+- `KEEPR_API_KEY_VALUE`
+- `KEEPR_API_BASE_URL_VALUE` (use `http://127.0.0.1:8789/api` for local mock server)
+- `KEEPR_PRIVATE_KEY_VALUE`
 
-- Category A into `cre/cre-workflows/.env`
-- Category B into `cre/.env`
-- Category C into `frontend/.env.local` only if needed
+You can use local placeholders for simulation-only runs (replace with real secrets for shared/staging environments):
+
+```dotenv
+CRE_ETH_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001
+KEEPR_API_KEY_VALUE=local-dev-key
+KEEPR_API_BASE_URL_VALUE=http://127.0.0.1:8789/api
+KEEPR_PRIVATE_KEY_VALUE=0000000000000000000000000000000000000000000000000000000000000001
+```
 
 ## 7) Start the mock API server
 
