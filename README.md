@@ -8,6 +8,7 @@ Converge is a scoped hackathon submission from the 4626 codebase, focused only o
 - Requirement mapping: [`docs/hackathon/chainlink-cre-submission.md`](docs/hackathon/chainlink-cre-submission.md)
 - Video script: [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md)
 - Full A-I writeup: [`docs/hackathon/chainlink-cre-a-to-i.md`](docs/hackathon/chainlink-cre-a-to-i.md)
+- Unrestricted laptop setup checklist: [`docs/hackathon/unrestricted-laptop-setup-checklist.md`](docs/hackathon/unrestricted-laptop-setup-checklist.md)
 - Submission form copy: [`docs/hackathon/submission-form-copy.md`](docs/hackathon/submission-form-copy.md)
 - Final submission checklist: [`docs/hackathon/final-submission-checklist.md`](docs/hackathon/final-submission-checklist.md)
 
@@ -126,4 +127,3 @@ cre workflow simulate runtime-orchestrator --target local-simulation --non-inter
 - [`docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md`](docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md)
 - [`docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`](docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md)
 - [`docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.md`](docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.md)
-
